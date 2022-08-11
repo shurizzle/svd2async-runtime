@@ -65,7 +65,7 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
             int.value
         );
         println!(
-            "        crate::executor::RUNTIME.{}(&CriticalSection::new())",
+            "        crate::executor::__private::RUNTIME.{}(&CriticalSection::new())",
             int.name
         );
         println!("    }}");
