@@ -24,8 +24,10 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     println!("pub trait Runtime: crate::runtime::Ready {{");
+    println!("    type Result: crate::tuple::Tuple;");
 
-    println!("    fn init(&mut self, cs: &CriticalSection);");
+    println!();
+    println!("    fn init(&mut self, cs: &CriticalSection) -> Self::Result;");
     println!();
     println!("    fn snapshot(&mut self, cs: &CriticalSection);");
     println!();
@@ -94,7 +96,6 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("mod vtable {{");
     println!("    use avr_device::interrupt::CriticalSection;");
-    vtable_cs_trampoline("init");
     vtable_cs_trampoline("snapshot");
     vtable_trampoline("idle");
     vtable_trampoline("wake");
@@ -112,7 +113,6 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("#[repr(C)]");
     println!("struct Vtable {{");
-    println!("    pub init: unsafe fn(*mut (), &CriticalSection),");
     println!("    pub snapshot: unsafe fn(*mut (), &CriticalSection),");
     println!("    pub idle: unsafe fn(*mut ()),");
     println!("    pub wake: unsafe fn(*mut ()),");
@@ -131,7 +131,6 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("#[inline(always)]");
     println!("const fn vtable<R: Runtime>() -> &'static Vtable {{");
     println!("    &Vtable {{");
-    vtable_entry("init");
     vtable_entry("snapshot");
     vtable_entry("idle");
     vtable_entry("wake");
@@ -192,7 +191,6 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("        }}");
     println!("    }}");
     println!();
-    call_cs_trampoline("init", true);
     println!();
     call_cs_trampoline("snapshot", true);
     println!();
