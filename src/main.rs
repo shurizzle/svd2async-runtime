@@ -16,7 +16,7 @@ fn valid_version(s: &str) -> Result<usize, String> {
 
 #[derive(Parser)]
 struct Args {
-    #[clap(short, long, default_value_t = 1, value_parser = valid_version)]
+    #[clap(short, long, default_value_t = VERSIONS.len(), value_parser = valid_version)]
     version: usize,
     #[clap(multiple = false)]
     file: String,
