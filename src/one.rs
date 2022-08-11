@@ -7,10 +7,10 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
         .flat_map(|p| {
             p.interrupt
                 .iter()
-                .filter(|i| !starts_with_case_insensitive(i.name.as_str(), "reserved"))
+                // .filter(|i| !starts_with_case_insensitive(i.name.as_str(), "reserved"))
                 .cloned()
                 .map(|mut i| {
-                    i.name = i.name.to_lowercase();
+                    i.name = i.name.trim().to_lowercase();
                     i.description = i.description.map(|mut d| {
                         d.in_place(str::trim);
                         d
@@ -38,20 +38,22 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("    fn shutdown(&self);");
     for i in &interrupts {
-        println!();
-        if let Some(desc) = i.description.as_ref() {
-            for l in desc.lines() {
-                println!("    /// {}", l);
+        if !i.name.starts_with("reserved") {
+            println!();
+            if let Some(desc) = i.description.as_ref() {
+                for l in desc.lines() {
+                    println!("    /// {}", l);
+                }
+                println!("    ///");
             }
-            println!("    ///");
+            println!("    /// # Safety");
+            println!("    /// Interrupts are marked unsafe and executed in critical section");
+            println!("    #[inline(always)]");
+            println!(
+                "    unsafe fn {}(&mut self, _cs: &CriticalSection) {{}}",
+                i.name
+            );
         }
-        println!("    /// # Safety");
-        println!("    /// Interrupts are marked unsafe and executed in critical section");
-        println!("    #[inline(always)]");
-        println!(
-            "    unsafe fn {}(&mut self, _cs: &CriticalSection) {{}}",
-            i.name
-        );
     }
     println!("}}");
 
@@ -65,10 +67,12 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
             "    unsafe extern \"avr-interrupt\" fn __vector_{}() {{",
             int.value
         );
-        println!(
-            "        crate::executor::__private::RUNTIME.{}(&CriticalSection::new())",
-            int.name
-        );
+        if !int.name.starts_with("reserved") {
+            println!(
+                "        crate::executor::__private::RUNTIME.{}(&CriticalSection::new())",
+                int.name
+            );
+        }
         println!("    }}");
     }
     println!("}}");
@@ -107,7 +111,9 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("        (*(ptr as *mut R)).is_ready(cs)");
     println!("    }}");
     for i in &interrupts {
-        vtable_cs_trampoline(&i.name);
+        if !i.name.starts_with("reserved") {
+            vtable_cs_trampoline(&i.name);
+        }
     }
     println!("}}");
 
@@ -120,7 +126,9 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("    pub shutdown: unsafe fn(*mut ()),");
     println!("    pub is_ready: unsafe fn(*mut (), &CriticalSection) -> bool,");
     for i in &interrupts {
-        println!("    pub {}: unsafe fn(*mut (), &CriticalSection),", i.name);
+        if !i.name.starts_with("reserved") {
+            println!("    pub {}: unsafe fn(*mut (), &CriticalSection),", i.name);
+        }
     }
     println!("}}");
 
@@ -138,7 +146,9 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     vtable_entry("shutdown");
     vtable_entry("is_ready");
     for i in &interrupts {
-        vtable_entry(&i.name);
+        if !i.name.starts_with("reserved") {
+            vtable_entry(&i.name);
+        }
     }
     println!("    }}");
     println!("}}");
@@ -207,13 +217,15 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("        unsafe {{ ((*(self.vtable)).is_ready)(self.data, cs) }}",);
     println!("    }}");
     for i in &interrupts {
-        println!();
-        if let Some(desc) = i.description.as_ref() {
-            for l in desc.lines() {
-                println!("    /// {}", l);
+        if !i.name.starts_with("reserved") {
+            println!();
+            if let Some(desc) = i.description.as_ref() {
+                for l in desc.lines() {
+                    println!("    /// {}", l);
+                }
             }
+            call_cs_trampoline(&i.name, false);
         }
-        call_cs_trampoline(&i.name, false);
     }
     println!();
     println!("    #[doc(hidden)]");
