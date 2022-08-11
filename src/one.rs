@@ -144,7 +144,6 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("}}");
 
     let call_trampoline = |name: &str| {
-        println!();
         println!("    #[allow(dead_code)]");
         println!("    #[inline(always)]");
         println!("    pub fn {}(&self) {{", name);
@@ -152,7 +151,6 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
         println!("    }}");
     };
     let call_cs_trampoline = |name: &str, allow_dead_code: bool| {
-        println!();
         if allow_dead_code {
             println!("    #[allow(dead_code)]");
         }
@@ -178,10 +176,15 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("            vtable: vtable::<R>(),");
     println!("        }}");
     println!("    }}");
+    println!();
     call_cs_trampoline("init", true);
+    println!();
     call_cs_trampoline("snapshot", true);
+    println!();
     call_trampoline("idle");
+    println!();
     call_trampoline("wake");
+    println!();
     call_trampoline("shutdown");
     println!();
     println!("    #[allow(dead_code)]");
@@ -190,6 +193,12 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("        unsafe {{ (self.vtable.is_ready)(self.data, cs) }}",);
     println!("    }}");
     for i in &interrupts {
+        println!();
+        if let Some(desc) = i.description.as_ref() {
+            for l in desc.lines() {
+                println!("    /// {}", l);
+            }
+        }
         call_cs_trampoline(&i.name, false);
     }
     println!();
