@@ -55,18 +55,17 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("mod interrupts {{");
     println!("    use avr_device::interrupt::CriticalSection;");
-    for i in &interrupts {
-        println!();
+    for int in &interrupts {
         println!("    #[doc(hidden)]");
-        println!("    #[export_name = \"__vector_{}\"]", i.value);
+        println!("    #[export_name = \"__vector_{}\"]", int.value);
         println!(
             "    unsafe extern \"avr-interrupt\" fn __vector_{}() {{",
-            i.value
+            int.value
         );
-        println!("        (*(crate::executor::RUNTIME.get()))");
-        println!("            .as_mut()");
-        println!("            .unwrap_unchecked()");
-        println!("            .{}(&CriticalSection::new())", i.name);
+        println!(
+            "        crate::executor::RUNTIME.{}(&CriticalSection::new())",
+            int.name
+        );
         println!("    }}");
     }
     println!("}}");
@@ -111,6 +110,7 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("}}");
 
     println!();
+    println!("#[repr(C)]");
     println!("struct Vtable {{");
     println!("    pub init: unsafe fn(*mut (), &CriticalSection),");
     println!("    pub snapshot: unsafe fn(*mut (), &CriticalSection),");
@@ -129,7 +129,7 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     println!();
     println!("#[inline(always)]");
-    println!("fn vtable<R: Runtime>() -> &'static Vtable {{");
+    println!("const fn vtable<R: Runtime>() -> &'static Vtable {{");
     println!("    &Vtable {{");
     vtable_entry("init");
     vtable_entry("snapshot");
@@ -147,7 +147,10 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
         println!("    #[allow(dead_code)]");
         println!("    #[inline(always)]");
         println!("    pub fn {}(&self) {{", name);
-        println!("        unsafe {{ (self.vtable.{})(self.data) }}", name);
+        println!(
+            "        unsafe {{ ((*(self.vtable)).{})(self.data) }}",
+            name
+        );
         println!("    }}");
     };
     let call_cs_trampoline = |name: &str, allow_dead_code: bool| {
@@ -156,21 +159,33 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
         }
         println!("    #[inline(always)]");
         println!("    pub fn {}(&self, cs: &CriticalSection) {{", name);
-        println!("        unsafe {{ (self.vtable.{})(self.data, cs) }}", name);
+        println!(
+            "        unsafe {{ ((*(self.vtable)).{})(self.data, cs) }}",
+            name
+        );
         println!("    }}");
     };
 
     println!();
+    println!("#[repr(C)]");
     println!("pub struct RawRuntime {{");
     println!("    data: *mut (),");
-    println!("    vtable: &'static Vtable,");
+    println!("    vtable: *const Vtable,");
     println!("}}");
     println!();
     println!("unsafe impl Sync for RawRuntime {{}}");
     println!();
     println!("impl RawRuntime {{");
     println!("    #[inline(always)]");
-    println!("    pub fn new<R: Runtime>(runtime: &R) -> Self {{");
+    println!("    pub const fn uninit() -> Self {{");
+    println!("        Self {{");
+    println!("            data: 0 as *mut (),");
+    println!("            vtable: 0 as *const Vtable,");
+    println!("        }}");
+    println!("    }}");
+    println!();
+    println!("    #[inline(always)]");
+    println!("    pub const fn new<R: Runtime>(runtime: &R) -> Self {{");
     println!("        Self {{");
     println!("            data: runtime as *const R as *const () as *mut (),");
     println!("            vtable: vtable::<R>(),");
@@ -190,7 +205,7 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("    #[allow(dead_code)]");
     println!("    #[inline(always)]");
     println!("    pub fn is_ready(&self, cs: &CriticalSection) -> bool {{",);
-    println!("        unsafe {{ (self.vtable.is_ready)(self.data, cs) }}",);
+    println!("        unsafe {{ ((*(self.vtable)).is_ready)(self.data, cs) }}",);
     println!("    }}");
     for i in &interrupts {
         println!();
