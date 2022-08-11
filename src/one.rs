@@ -23,11 +23,12 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("use avr_device::interrupt::CriticalSection;");
     println!();
 
-    println!("pub trait Runtime: crate::runtime::Ready {{");
-    println!("    type Result: crate::tuple::Tuple;");
+    println!("pub trait Runtime: crate::runtime::Ready + Sized {{");
+    println!("    type Memory: crate::runtime::Memory;");
+    println!("    type Arguments: crate::tuple::Tuple;");
 
     println!();
-    println!("    fn init(&mut self, cs: &CriticalSection) -> Self::Result;");
+    println!("    fn new(mem: Self::Memory, cs: &CriticalSection) -> (Self, Self::Arguments);");
     println!();
     println!("    fn snapshot(&mut self, cs: &CriticalSection);");
     println!();
