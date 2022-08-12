@@ -59,128 +59,22 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     println!();
     println!("mod interrupts {{");
-    println!("    use avr_device::interrupt::CriticalSection;");
     for int in &interrupts {
-        println!("    #[doc(hidden)]");
-        println!("    #[export_name = \"__vector_{}\"]", int.value);
-        println!(
-            "    unsafe extern \"avr-interrupt\" fn __vector_{}() {{",
-            int.value
-        );
-        if !int.name.starts_with("reserved") {
+        if int.name.starts_with("reserved") {
+            println!("    #[doc(hidden)]");
+            println!("    #[export_name = \"__vector_{}\"]", int.value);
             println!(
-                "        crate::executor::__private::RUNTIME.{}(&CriticalSection::new())",
-                int.name
+                "    unsafe extern \"avr-interrupt\" fn __vector_{}() {{}}",
+                int.value
             );
         }
-        println!("    }}");
     }
     println!("}}");
-
-    let vtable_trampoline = |name: &str| {
-        println!();
-        println!("    #[inline(always)]");
-        println!(
-            "    pub unsafe fn {}<R: super::Runtime>(ptr: *mut ()) {{",
-            name
-        );
-        println!("        (*(ptr as *mut R)).{}()", name);
-        println!("    }}");
-    };
-    let vtable_cs_trampoline = |name: &str| {
-        println!();
-        println!("    #[inline(always)]");
-        println!(
-            "    pub unsafe fn {}<R: super::Runtime>(ptr: *mut (), cs: &CriticalSection) {{",
-            name
-        );
-        println!("        (*(ptr as *mut R)).{}(cs)", name);
-        println!("    }}");
-    };
-
-    println!();
-    println!("mod vtable {{");
-    println!("    use avr_device::interrupt::CriticalSection;");
-    vtable_cs_trampoline("snapshot");
-    vtable_trampoline("idle");
-    vtable_trampoline("wake");
-    vtable_trampoline("shutdown");
-    println!();
-    println!("    #[inline(always)]");
-    println!("    pub unsafe fn is_ready<R: super::Runtime>(ptr: *mut (), cs: &CriticalSection) -> bool {{");
-    println!("        (*(ptr as *mut R)).is_ready(cs)");
-    println!("    }}");
-    for i in &interrupts {
-        if !i.name.starts_with("reserved") {
-            vtable_cs_trampoline(&i.name);
-        }
-    }
-    println!("}}");
-
-    println!();
-    println!("#[repr(C)]");
-    println!("struct Vtable {{");
-    println!("    pub snapshot: unsafe fn(*mut (), &CriticalSection),");
-    println!("    pub idle: unsafe fn(*mut ()),");
-    println!("    pub wake: unsafe fn(*mut ()),");
-    println!("    pub shutdown: unsafe fn(*mut ()),");
-    println!("    pub is_ready: unsafe fn(*mut (), &CriticalSection) -> bool,");
-    for i in &interrupts {
-        if !i.name.starts_with("reserved") {
-            println!("    pub {}: unsafe fn(*mut (), &CriticalSection),", i.name);
-        }
-    }
-    println!("}}");
-
-    let vtable_entry = |name: &str| {
-        println!("        {}: vtable::{}::<R>,", name, name);
-    };
-
-    println!();
-    println!("#[inline(always)]");
-    println!("const fn vtable<R: Runtime>() -> &'static Vtable {{");
-    println!("    &Vtable {{");
-    vtable_entry("snapshot");
-    vtable_entry("idle");
-    vtable_entry("wake");
-    vtable_entry("shutdown");
-    vtable_entry("is_ready");
-    for i in &interrupts {
-        if !i.name.starts_with("reserved") {
-            vtable_entry(&i.name);
-        }
-    }
-    println!("    }}");
-    println!("}}");
-
-    let call_trampoline = |name: &str| {
-        println!("    #[allow(dead_code)]");
-        println!("    #[inline(always)]");
-        println!("    pub fn {}(&self) {{", name);
-        println!(
-            "        unsafe {{ ((*(self.vtable)).{})(self.data) }}",
-            name
-        );
-        println!("    }}");
-    };
-    let call_cs_trampoline = |name: &str, allow_dead_code: bool| {
-        if allow_dead_code {
-            println!("    #[allow(dead_code)]");
-        }
-        println!("    #[inline(always)]");
-        println!("    pub fn {}(&self, cs: &CriticalSection) {{", name);
-        println!(
-            "        unsafe {{ ((*(self.vtable)).{})(self.data, cs) }}",
-            name
-        );
-        println!("    }}");
-    };
 
     println!();
     println!("#[repr(C)]");
     println!("pub struct RawRuntime {{");
-    println!("    data: *mut (),");
-    println!("    vtable: *const Vtable,");
+    println!("    pub data: *mut (),");
     println!("}}");
     println!();
     println!("unsafe impl Sync for RawRuntime {{}}");
@@ -190,7 +84,6 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("    pub const fn uninit() -> Self {{");
     println!("        Self {{");
     println!("            data: 0 as *mut (),");
-    println!("            vtable: 0 as *const Vtable,");
     println!("        }}");
     println!("    }}");
     println!();
@@ -198,35 +91,8 @@ pub fn run(file: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("    pub const fn new<R: Runtime>(runtime: &R) -> Self {{");
     println!("        Self {{");
     println!("            data: runtime as *const R as *const () as *mut (),");
-    println!("            vtable: vtable::<R>(),");
     println!("        }}");
     println!("    }}");
-    println!();
-    println!();
-    call_cs_trampoline("snapshot", true);
-    println!();
-    call_trampoline("idle");
-    println!();
-    call_trampoline("wake");
-    println!();
-    call_trampoline("shutdown");
-    println!();
-    println!("    #[allow(dead_code)]");
-    println!("    #[inline(always)]");
-    println!("    pub fn is_ready(&self, cs: &CriticalSection) -> bool {{",);
-    println!("        unsafe {{ ((*(self.vtable)).is_ready)(self.data, cs) }}",);
-    println!("    }}");
-    for i in &interrupts {
-        if !i.name.starts_with("reserved") {
-            println!();
-            if let Some(desc) = i.description.as_ref() {
-                for l in desc.lines() {
-                    println!("    /// {}", l);
-                }
-            }
-            call_cs_trampoline(&i.name, false);
-        }
-    }
     println!();
     println!("    #[doc(hidden)]");
     println!("    #[inline(always)]");
